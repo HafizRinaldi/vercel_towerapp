@@ -98,9 +98,9 @@ def filter_by_status(df: pd.DataFrame, status: str | None) -> pd.DataFrame:
 
 
 # =========================
-# DOWNLOAD EXCEL
+# DOWNLOAD EXCEL (dengan key unik)
 # =========================
-def download_excel(df: pd.DataFrame, filename: str, label: str):
+def download_excel(df: pd.DataFrame, filename: str, label: str, key: str):
     buf = BytesIO()
     df.to_excel(buf, index=False)
     st.download_button(
@@ -108,6 +108,7 @@ def download_excel(df: pd.DataFrame, filename: str, label: str):
         data=buf.getvalue(),
         file_name=filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=key,
     )
 
 
@@ -117,6 +118,9 @@ def download_excel(df: pd.DataFrame, filename: str, label: str):
 st.set_page_config(page_title="Report Tower Online/Offline", layout="wide")
 st.title("📊 Report Tower Online / Offline")
 st.caption("Data diambil langsung dari web report dengan login otomatis (WIB).")
+
+# Container untuk banner supaya bisa diisi setelah tombol diproses
+banner_container = st.container()
 
 # --- Sidebar: pilihan kategori data
 with st.sidebar:
@@ -132,40 +136,6 @@ with st.sidebar:
         status_filter = "Offline"
     else:
         status_filter = "Online"
-
-# =========================
-# BANNER MERAH + INFO TERAKHIR UPDATE (WIB)
-# =========================
-last_update = st.session_state.get("last_update")
-if last_update:
-    last_update_str = last_update.strftime("%Y-%m-%d %H:%M:%S")
-    info_update = f"Data terakhir diupdate (WIB) pada: {last_update_str}"
-else:
-    info_update = "Data belum pernah diupdate. Silakan klik tombol Refresh di bawah."
-
-nama_user = "User"  # bisa kamu ganti, atau ambil dari login lain kalau ada
-
-banner_html = f"""
-<div style="
-    background: linear-gradient(90deg,#d32f2f,#f44336);
-    padding: 16px 24px;
-    border-radius: 16px;
-    color: white;
-    margin-bottom: 16px;
-">
-  <div style="font-weight:700; font-size:18px; margin-bottom:4px;">
-    Selamat Pagi, {nama_user.upper()}!
-  </div>
-  <div style="font-size:13px; font-weight:500;">
-    {info_update}
-  </div>
-  <div style="font-size:12px; margin-top:4px; opacity:0.85;">
-    Tekan tombol <b>🔄 Refresh / Ambil Data dari Web</b> untuk mengambil update terbaru.
-  </div>
-</div>
-"""
-
-st.markdown(banner_html, unsafe_allow_html=True)
 
 # =========================
 # TOMBOL REFRESH / AMBIL DATA
@@ -185,6 +155,61 @@ if refresh_clicked:
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
 
+# =========================
+# BANNER MERAH – DIISI SETELAH TOMBOL DIPROSES
+# =========================
+with banner_container:
+    last_update = st.session_state.get("last_update")
+    if last_update:
+        info_waktu = last_update.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        info_waktu = "-"
+
+    nama_user = "USER"  # bisa diganti nama kamu
+
+    # PERHATIKAN: tidak ada indent 4 spasi di depan <div> agar tidak jadi code block
+    banner_html = f"""
+<div style="
+    background: linear-gradient(90deg,#c62828,#ef5350);
+    padding: 20px 26px;
+    border-radius: 20px;
+    color: white;
+    margin-top: 10px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+">
+  <div style="
+      background: white;
+      color: #c62828;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+  ">
+    💬
+  </div>
+
+  <div style="flex: 1;">
+    <div style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">
+      Selamat Pagi, {nama_user}!
+    </div>
+    <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">
+      Data Maintenance Order terakhir diupdate pada: {info_waktu}
+    </div>
+    <div style="font-size: 12px; opacity: 0.9;">
+      Tekan tombol <b>Refresh / Ambil Data dari Web</b> untuk mengambil update terbaru.
+    </div>
+  </div>
+</div>
+"""
+    st.markdown(banner_html, unsafe_allow_html=True)
+
 # --- Jika sudah ada data di session_state
 if "df" in st.session_state:
     df = st.session_state["df"]
@@ -193,6 +218,7 @@ if "df" in st.session_state:
     # =========================
     # TIMESTAMP UNTUK NAMA FILE (WIB)
     # =========================
+    last_update = st.session_state.get("last_update")
     if last_update:
         timestamp = last_update.strftime("%Y-%m-%d_%H-%M-%S")
     else:
@@ -204,15 +230,14 @@ if "df" in st.session_state:
     st.markdown("### 💾 Export / Download")
     col1, col2 = st.columns(2)
 
-    # Download semua data
     with col1:
         download_excel(
             df,
             f"report_semua_{timestamp}.xlsx",
             "Download Semua Data",
+            key="dl_all",
         )
 
-    # Tentukan label & nama file untuk data filtered
     if status_filter is None:
         export_label = "Download Semua Data"
         export_filename = f"report_semua_{timestamp}.xlsx"
@@ -224,7 +249,12 @@ if "df" in st.session_state:
         export_filename = f"report_online_{timestamp}.xlsx"
 
     with col2:
-        download_excel(df_filtered, export_filename, export_label)
+        download_excel(
+            df_filtered,
+            export_filename,
+            export_label,
+            key="dl_filtered",
+        )
 
     st.write("---")
 
