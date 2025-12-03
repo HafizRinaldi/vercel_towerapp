@@ -5,7 +5,15 @@ from bs4 import BeautifulSoup
 from io import BytesIO
 from dotenv import load_dotenv
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+# =========================
+# FUNGSI WAKTU WIB (UTC+7)
+# =========================
+def now_wib():
+    return datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(
+        timezone(timedelta(hours=7))
+    )
 
 # =========================
 # LOAD ENV (username & password rahasia)
@@ -108,7 +116,7 @@ def download_excel(df: pd.DataFrame, filename: str, label: str):
 # =========================
 st.set_page_config(page_title="Report Tower Online/Offline", layout="wide")
 st.title("📊 Report Tower Online / Offline")
-st.caption("Data diambil langsung dari web report dengan login otomatis.")
+st.caption("Data diambil langsung dari web report dengan login otomatis (WIB).")
 
 # --- Sidebar: pilihan kategori data
 with st.sidebar:
@@ -126,16 +134,16 @@ with st.sidebar:
         status_filter = "Online"
 
 # =========================
-# BANNER MERAH + INFO TERAKHIR UPDATE
+# BANNER MERAH + INFO TERAKHIR UPDATE (WIB)
 # =========================
 last_update = st.session_state.get("last_update")
 if last_update:
     last_update_str = last_update.strftime("%Y-%m-%d %H:%M:%S")
-    info_update = f"Data terakhir diupdate pada: {last_update_str}"
+    info_update = f"Data terakhir diupdate (WIB) pada: {last_update_str}"
 else:
     info_update = "Data belum pernah diupdate. Silakan klik tombol Refresh di bawah."
 
-nama_user = "User"  # boleh kamu ganti / buat input nama sendiri
+nama_user = "User"  # bisa kamu ganti, atau ambil dari login lain kalau ada
 
 banner_html = f"""
 <div style="
@@ -171,7 +179,7 @@ if refresh_clicked:
             df_report = parse_report_to_df(html)
 
         st.session_state["df"] = df_report
-        st.session_state["last_update"] = datetime.now()
+        st.session_state["last_update"] = now_wib()
 
         st.success("Data berhasil diambil dari server.")
     except Exception as e:
@@ -182,14 +190,16 @@ if "df" in st.session_state:
     df = st.session_state["df"]
     df_filtered = filter_by_status(df, status_filter)
 
-    # Timestamp untuk nama file (pakai waktu last_update kalau ada)
+    # =========================
+    # TIMESTAMP UNTUK NAMA FILE (WIB)
+    # =========================
     if last_update:
         timestamp = last_update.strftime("%Y-%m-%d_%H-%M-%S")
     else:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = now_wib().strftime("%Y-%m-%d_%H-%M-%S")
 
     # =========================
-    # 💾 EXPORT PALING ATAS (DINAMIS + TGL/JAM)
+    # 💾 EXPORT PALING ATAS (DINAMIS + TGL/JAM WIB)
     # =========================
     st.markdown("### 💾 Export / Download")
     col1, col2 = st.columns(2)
@@ -202,7 +212,7 @@ if "df" in st.session_state:
             "Download Semua Data",
         )
 
-    # Tentukan label & filename untuk data filtered
+    # Tentukan label & nama file untuk data filtered
     if status_filter is None:
         export_label = "Download Semua Data"
         export_filename = f"report_semua_{timestamp}.xlsx"
