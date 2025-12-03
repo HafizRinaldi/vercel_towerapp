@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from io import BytesIO
 from dotenv import load_dotenv
 import os
+from datetime import datetime
 
 # =========================
 # LOAD ENV (username & password rahasia)
@@ -23,7 +24,8 @@ REPORT_URL = "http://103.176.44.189:3006/Report"
 def fetch_report_html():
     if not USERNAME or not PASSWORD:
         raise RuntimeError(
-            "USERNAME/PASSWORD tidak ditemukan di .env (LOGIN_USERNAME & LOGIN_PASSWORD)."
+            "USERNAME/PASSWORD tidak ditemukan di environment "
+            "(LOGIN_USERNAME & LOGIN_PASSWORD)."
         )
 
     session = requests.Session()
@@ -55,13 +57,11 @@ def parse_report_to_df(html: str) -> pd.DataFrame:
 
     table = tables[0]
 
-    # header
     thead = table.find("thead")
     if thead is None:
         raise RuntimeError("thead tidak ditemukan pada tabel.")
     headers = [th.text.strip() for th in thead.find_all("th")]
 
-    # rows
     tbody = table.find("tbody")
     if tbody is None:
         raise RuntimeError("tbody tidak ditemukan pada tabel.")
@@ -72,7 +72,6 @@ def parse_report_to_df(html: str) -> pd.DataFrame:
 
     df = pd.DataFrame(rows, columns=headers)
 
-    # hapus kolom detail "#" kalau ada
     if "#" in df.columns:
         df = df.drop(columns=["#"])
 
@@ -126,16 +125,54 @@ with st.sidebar:
     else:
         status_filter = "Online"
 
-st.write("Klik tombol di bawah untuk mengambil data terbaru dari web:")
+# =========================
+# BANNER MERAH + INFO TERAKHIR UPDATE
+# =========================
+last_update = st.session_state.get("last_update")
+if last_update:
+    last_update_str = last_update.strftime("%Y-%m-%d %H:%M:%S")
+    info_update = f"Data terakhir diupdate pada: {last_update_str}"
+else:
+    info_update = "Data belum pernah diupdate. Silakan klik tombol Refresh di bawah."
 
-# --- Tombol ambil data
-if st.button("🔄 Ambil Data dari Web", type="primary"):
+nama_user = "User"  # boleh kamu ganti / buat input nama sendiri
+
+banner_html = f"""
+<div style="
+    background: linear-gradient(90deg,#d32f2f,#f44336);
+    padding: 16px 24px;
+    border-radius: 16px;
+    color: white;
+    margin-bottom: 16px;
+">
+  <div style="font-weight:700; font-size:18px; margin-bottom:4px;">
+    Selamat Pagi, {nama_user.upper()}!
+  </div>
+  <div style="font-size:13px; font-weight:500;">
+    {info_update}
+  </div>
+  <div style="font-size:12px; margin-top:4px; opacity:0.85;">
+    Tekan tombol <b>🔄 Refresh / Ambil Data dari Web</b> untuk mengambil update terbaru.
+  </div>
+</div>
+"""
+
+st.markdown(banner_html, unsafe_allow_html=True)
+
+# =========================
+# TOMBOL REFRESH / AMBIL DATA
+# =========================
+refresh_clicked = st.button("🔄 Refresh / Ambil Data dari Web", type="primary")
+
+if refresh_clicked:
     try:
         with st.spinner("Sedang login & mengambil report..."):
             html = fetch_report_html()
             df_report = parse_report_to_df(html)
 
         st.session_state["df"] = df_report
+        st.session_state["last_update"] = datetime.now()
+
         st.success("Data berhasil diambil dari server.")
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
@@ -145,28 +182,37 @@ if "df" in st.session_state:
     df = st.session_state["df"]
     df_filtered = filter_by_status(df, status_filter)
 
+    # Timestamp untuk nama file (pakai waktu last_update kalau ada)
+    if last_update:
+        timestamp = last_update.strftime("%Y-%m-%d_%H-%M-%S")
+    else:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
     # =========================
-    # 💾 EXPORT PALING ATAS (DINAMIS)
+    # 💾 EXPORT PALING ATAS (DINAMIS + TGL/JAM)
     # =========================
     st.markdown("### 💾 Export / Download")
     col1, col2 = st.columns(2)
 
-    # Tombol download semua data
+    # Download semua data
     with col1:
-        download_excel(df, "report_semua.xlsx", "Download Semua Data")
+        download_excel(
+            df,
+            f"report_semua_{timestamp}.xlsx",
+            "Download Semua Data",
+        )
 
-    # Tentukan label & nama file sesuai kategori
+    # Tentukan label & filename untuk data filtered
     if status_filter is None:
         export_label = "Download Semua Data"
-        export_filename = "report_semua.xlsx"
+        export_filename = f"report_semua_{timestamp}.xlsx"
     elif status_filter == "Offline":
         export_label = "Download Data Offline"
-        export_filename = "report_offline.xlsx"
+        export_filename = f"report_offline_{timestamp}.xlsx"
     else:
         export_label = "Download Data Online"
-        export_filename = "report_online.xlsx"
+        export_filename = f"report_online_{timestamp}.xlsx"
 
-    # Tombol download data sesuai pilihan
     with col2:
         download_excel(df_filtered, export_filename, export_label)
 
@@ -205,4 +251,4 @@ if "df" in st.session_state:
     else:
         st.info("Kolom 'Status' tidak ditemukan, grafik tidak bisa dibuat.")
 else:
-    st.info("Belum ada data. Silakan klik tombol **Ambil Data dari Web** dulu.")
+    st.info("Belum ada data. Klik tombol **🔄 Refresh / Ambil Data dari Web** terlebih dahulu.")
